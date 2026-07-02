@@ -1,0 +1,26 @@
+== baseline_dd_sso ==
+nameplate: 160.0 PFLOP-yr | delivered: 147.0 PFLOP-yr (91.9%)
+mass: 3,219 kg -> 45.7 PFLOP-yr/tonne
+radiator: 40.8 m2 phys (75.4 m2 eff), array: 146.7 m2 / 54.8 kW BOL, battery: 36.1 kWh
+worst eclipse fraction: 0.125
+losses (PFLOP-yr): throttle (thermal+power): 0.0, node attrition: 7.2, checkpoint/restart tax: 5.7
+mass budget: IT hardware: 896, radiator+loop: 245, solar array: 457, battery: 278, shielding: 263, structure+mech: 599, bus (ADCS/comms/prop): 482
+
+[A done 0.8s]
+[B done 0.6s]
+[C done 3.2s]  knee at 1.00x -> 45.7 PFLOP-yr/t
+[D done 9.4s]  Tj optimum ~56 C @6kg/m2, ~68 C @14kg/m2 (shallow trade)
+[E done 2.3s]  shield optimum ~1.5 mm
+  dawn-dusk SSO | 550 km: 147.0 PFLOP-yr, 3,219 kg, 45.7 /t
+  51.6deg 420 km | full battery: 147.4 PFLOP-yr, 3,810 kg, 38.7 /t
+  51.6deg 420 km | battery 35% (idle in eclipse): 102.2 PFLOP-yr, 3,157 kg, 32.4 /t
+[F done 1.4s]
+[G done 110.4s]  p5/p50/p95 = 132/148/155 PFLOP-yr
+    sensitivity       SEU rate x: -0.36
+    sensitivity      dose rate x: -0.35
+    sensitivity       hard AFR x: -0.33
+    sensitivity   TID hardness x: +0.23
+    sensitivity      solar phase: +0.12
+    sensitivity  coating drift x: -0.07
+    sensitivity     array degr x: +0.01
+[H done 0.1s]

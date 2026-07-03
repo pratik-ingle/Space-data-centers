@@ -63,10 +63,10 @@ try {
 
   // 1. projection headline (analysis worker round-trip)
   await waitFor(
-    async () => !(await text(".headline-fom b")).includes("–"),
+    async () => !(await text(".dp-fom-value")).includes("–"),
     "projection headline",
   );
-  const fom = await text(".headline-fom b");
+  const fom = await text(".dp-fom-value");
   console.log(`headline PFLOP-yr/t: ${fom}`);
   if (!(parseFloat(fom) > 0)) throw new Error(`bad figure of merit: ${fom}`);
 
@@ -113,10 +113,10 @@ try {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await waitFor(
-    async () => (await text(".headline-fom b")) !== fom,
+    async () => (await text(".dp-fom-value")) !== fom,
     "projection update after slider move",
   );
-  console.log(`headline after altitude change: ${await text(".headline-fom b")}`);
+  console.log(`headline after altitude change: ${await text(".dp-fom-value")}`);
 
   // 6b. eclipse pipeline: ISS-like profile at t=0 has beta ~0 -> the badge
   // must flip to ECLIPSE within a couple of orbits of play
@@ -135,7 +135,10 @@ try {
   await page.click(".transport .play"); // pause
 
   // 7. reset, run the full mission, confirm completion at 5 yr
-  await page.click("button.ghost"); // reset
+  await page.$$eval(".header-actions button", (btns) => {
+    const b = btns.find((x) => x.textContent?.trim() === "reset");
+    if (b) b.click();
+  });
   await sleep(500); // debounce + re-init
   await page.$$eval(".transport button", (btns) => {
     const b = btns.find((x) => (x.textContent ?? "").includes("end"));
@@ -172,6 +175,49 @@ try {
   if (SHOT) {
     await page.screenshot({ path: SHOT, fullPage: false });
     console.log(`screenshot: ${SHOT}`);
+  }
+
+  // 9. A/B compare: pin the baseline, switch preset, a real delta appears
+  await page.$$eval(".dp-pinrow button", (btns) => {
+    const b = btns.find((x) => (x.textContent ?? "").includes("pin as baseline"));
+    if (b) b.click();
+  });
+  await waitFor(async () => (await page.$(".dp-pinname")) !== null, "pin lands");
+  await page.select(".preset-select", "iss_lean");
+  await sleep(700); // re-init debounce: the lean mission must actually load
+  await waitFor(async () => {
+    const el = await page.$(".dp-delta");
+    if (!el) return false;
+    const t = await text(".dp-delta");
+    return !t.includes("0.0 (0.0%)"); // wait for the fresh projection
+  }, "A/B delta vs pinned baseline");
+  const deltaTxt = await text(".dp-delta");
+  console.log(`pinned: "${await text(".dp-pinname")}" · delta: "${deltaTxt}"`);
+  if (!deltaTxt.includes("▼"))
+    throw new Error("battery-lean design should project below the baseline");
+
+  // 10. event log: run the lean design to end, click an event -> timeline jumps
+  await page.$$eval(".transport button", (btns) => {
+    const b = btns.find((x) => (x.textContent ?? "").includes("end"));
+    if (b) b.click();
+  });
+  await waitFor(
+    async () => (await text(".time-readouts .ro")).includes("5.00 yr"),
+    "lean mission completes",
+  );
+  const nEvents = (await page.$$(".eventlist .event")).length;
+  if (nEvents < 5)
+    throw new Error(`battery-lean run logged too few events (${nEvents})`);
+  await page.$$eval(".eventlist .event", (els) => {
+    els[0].click();
+  });
+  await sleep(400);
+  const tAfterJump = await text(".time-readouts .ro");
+  console.log(`events: ${nEvents} · after jump: "${tAfterJump}"`);
+  if (tAfterJump.includes("5.00 yr"))
+    throw new Error("event click did not seek the timeline");
+  if (SHOT) {
+    await page.screenshot({ path: SHOT.replace(/\.png$/, "_ab.png") });
   }
 
   if (errors.length) {

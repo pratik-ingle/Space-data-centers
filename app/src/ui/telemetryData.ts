@@ -63,6 +63,30 @@ export function orbitSeries(tr: PhaseTrace): OrbitSeriesData {
   };
 }
 
+/**
+ * Union-join two epoch grids for uPlot aligned data: returns the merged
+ * ascending x plus each y remapped with nulls where its grid has no sample
+ * (render pinned overlays with spanGaps so dashes bridge the nulls).
+ */
+export function joinSeries(
+  x1: number[],
+  ys1: number[][],
+  x2: number[],
+  ys2: number[][],
+): { x: number[]; ys1: (number | null)[][]; ys2: (number | null)[][] } {
+  const xs = Array.from(new Set([...x1, ...x2])).sort((a, b) => a - b);
+  const idx = new Map(xs.map((v, i) => [v, i]));
+  const remap = (xg: number[], ys: number[][]): (number | null)[][] =>
+    ys.map((y) => {
+      const out: (number | null)[] = new Array<number | null>(xs.length).fill(null);
+      xg.forEach((xv, i) => {
+        out[idx.get(xv)!] = y[i];
+      });
+      return out;
+    });
+  return { x: xs, ys1: remap(x1, ys1), ys2: remap(x2, ys2) };
+}
+
 export interface MissionSeriesData {
   /** Mission time [yr]. */
   x: number[];

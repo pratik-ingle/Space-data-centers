@@ -10,6 +10,8 @@ import {
   baselineDd,
   ConfigSchema,
   designWarnings,
+  parseConfig,
+  PRESETS,
   setParam as coreSetParam,
   sizeDesign,
 } from "../core";
@@ -42,6 +44,15 @@ export interface TickState {
   sample: TickSample | null;
 }
 
+/** Snapshot of a design pinned for A/B comparison (deterministic run). */
+export interface PinnedBaseline {
+  name: string;
+  cfg: Config;
+  summary: MissionSummary;
+  hist: EpochRow[];
+  design: Design;
+}
+
 export interface StudioState {
   cfg: Config;
   /** Sized design for the CURRENT sliders (recomputed synchronously). */
@@ -62,6 +73,11 @@ export interface StudioState {
   // --- deterministic projection of the current design (analysis worker)
   projection: MissionSummary | null;
   projecting: boolean;
+  // --- A/B compare
+  pinned: PinnedBaseline | null;
+  pinning: boolean;
+  /** Active preset id, or "custom" once any parameter is touched. */
+  presetId: string;
   // --- actions
   setParam: (path: string, value: number) => void;
   mutateCfg: (mutate: (c: Config) => void) => void;
@@ -75,6 +91,12 @@ export interface StudioState {
   runToEnd: () => void;
   setWarp: (warp: number) => void;
   seek: (timeS: number) => void;
+  applyPreset: (id: string) => void;
+  pinBaseline: () => void;
+  unpin: () => void;
+  exportJson: () => string;
+  /** Throws (ZodError/SyntaxError) on invalid input; caller shows the message. */
+  importJson: (text: string) => void;
 }
 
 const simWorker = new Worker(new URL("../worker/simWorker.ts", import.meta.url), {
@@ -89,6 +111,9 @@ const postSim = (m: ToSim): void => simWorker.postMessage(m);
 const postAna = (m: ToAnalysis): void => anaWorker.postMessage(m);
 
 let projId = 0;
+let pinReqId = 0;
+/** Cfg snapshot taken when the pin request was posted (not when it lands). */
+let pinReqCfg: Config | null = null;
 let reinitTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Debounced worker restart after slider motion settles. */
@@ -106,9 +131,9 @@ const initialCfg = baselineDd();
 export const useStudio = create<StudioState>()(
   subscribeWithSelector((set, get) => {
     /** Apply a validated new config: instant sizing, debounced sim restart. */
-    const applyCfg = (cfg: Config): void => {
+    const applyCfg = (cfg: Config, presetId = "custom"): void => {
       const design = sizeDesign(cfg);
-      set({ cfg, design, warnings: designWarnings(cfg, design) });
+      set({ cfg, design, warnings: designWarnings(cfg, design), presetId });
       scheduleReinit(cfg);
     };
 
@@ -137,6 +162,9 @@ export const useStudio = create<StudioState>()(
       summary: null,
       projection: null,
       projecting: false,
+      pinned: null,
+      pinning: false,
+      presetId: "baseline_dd",
 
       setParam: (path, value) => applyCfg(coreSetParam(get().cfg, path, value)),
 
@@ -161,7 +189,7 @@ export const useStudio = create<StudioState>()(
           c.mission.seed = Math.max(0, Math.round(seed));
         }),
 
-      resetCfg: () => applyCfg(baselineDd()),
+      resetCfg: () => applyCfg(baselineDd(), "baseline_dd"),
 
       play: () => postSim({ t: "play" }),
       pause: () => postSim({ t: "pause" }),
@@ -172,6 +200,31 @@ export const useStudio = create<StudioState>()(
         set((s) => ({ tick: { ...s.tick, warp } }));
       },
       seek: (timeS) => postSim({ t: "seek", timeS }),
+
+      applyPreset: (id) => {
+        const p = PRESETS.find((x) => x.id === id);
+        if (p) applyCfg(p.make(), id);
+      },
+
+      pinBaseline: () => {
+        // A/B compares EXPECTED outcomes: force the deterministic path so
+        // the pinned curve matches projection semantics even for presets
+        // that default to sampled mode.
+        const cfg = structuredClone(get().cfg);
+        cfg.mission.stochastic = false;
+        pinReqCfg = cfg;
+        set({ pinning: true });
+        postAna({ t: "mission", id: ++pinReqId, cfg });
+      },
+
+      unpin: () => set({ pinned: null, pinning: false }),
+
+      exportJson: () => JSON.stringify(get().cfg, null, 2),
+
+      importJson: (text) => {
+        const cfg = parseConfig(JSON.parse(text));
+        applyCfg(cfg);
+      },
     };
   }),
 );
@@ -239,9 +292,22 @@ anaWorker.onmessage = (ev: MessageEvent<FromAnalysis>) => {
       }
       break;
     case "mission":
+      if (m.id === pinReqId && pinReqCfg) {
+        useStudio.setState({
+          pinned: {
+            name: pinReqCfg.name,
+            cfg: pinReqCfg,
+            summary: m.summary,
+            hist: m.hist,
+            design: m.design,
+          },
+          pinning: false,
+        });
+      }
+      break;
     case "mcProgress":
     case "mc":
-      // consumed by M4/M5 features
+      // consumed by the M5 Monte Carlo panel
       break;
   }
 };

@@ -8,6 +8,7 @@ import { runMission } from "../core/mission";
 import { rebaseTraceToPhase } from "../core/orbitloop";
 import { MissionSim } from "../core/mission";
 import { PARAM_META, baselineDd, getParam } from "../core/params";
+import { parseConfig, PRESETS } from "../core/params";
 import {
   clamp,
   fmtDuration,
@@ -18,7 +19,12 @@ import {
   stepDecimals,
 } from "../ui/format";
 import { posToVal, valToPos, SLIDER_STEPS } from "../ui/sliderMath";
-import { missionSeries, offBands, orbitSeries } from "../ui/telemetryData";
+import {
+  joinSeries,
+  missionSeries,
+  offBands,
+  orbitSeries,
+} from "../ui/telemetryData";
 
 describe("format helpers", () => {
   it("stepDecimals matches slider steps", () => {
@@ -123,6 +129,18 @@ describe("telemetry marshaling", () => {
     expect(Math.max(...d.pArrKw)).toBeLessThan(1000);
   });
 
+  it("joinSeries union-joins two epoch grids with nulls", () => {
+    const j = joinSeries([0, 1, 2], [[10, 11, 12]], [0.5, 1, 1.5], [[20, 21, 22]]);
+    expect(j.x).toEqual([0, 0.5, 1, 1.5, 2]);
+    expect(j.ys1[0]).toEqual([10, null, 11, null, 12]);
+    expect(j.ys2[0]).toEqual([null, 20, 21, 22, null]);
+    // identical grids need no nulls
+    const k = joinSeries([0, 1], [[1, 2]], [0, 1], [[3, 4]]);
+    expect(k.x).toEqual([0, 1]);
+    expect(k.ys1[0]).toEqual([1, 2]);
+    expect(k.ys2[0]).toEqual([3, 4]);
+  });
+
   it("missionSeries maps rows and marks SPE epochs", () => {
     const cfg = baselineDd();
     cfg.mission.years = 2;
@@ -140,5 +158,23 @@ describe("telemetry marshaling", () => {
     expect(d.tidKrad[d.tidKrad.length - 1]).toBeGreaterThan(0);
     const nSpe = res.hist.filter((r) => r.spe_frac > 0).length;
     expect(d.spe.length).toBe(nSpe);
+  });
+});
+
+describe("design JSON round trip", () => {
+  it("every preset survives export -> import exactly", () => {
+    for (const p of PRESETS) {
+      const cfg = p.make();
+      cfg.chip.tj_target_c = 77; // include a non-default edit
+      const back = parseConfig(JSON.parse(JSON.stringify(cfg)));
+      expect(back).toEqual(cfg);
+    }
+  });
+
+  it("rejects out-of-schema designs with a readable error", () => {
+    const cfg = PRESETS[0].make();
+    const bad = JSON.parse(JSON.stringify(cfg)) as { orbit: { alt_km: number } };
+    bad.orbit.alt_km = 99999;
+    expect(() => parseConfig(bad)).toThrow();
   });
 });

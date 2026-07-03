@@ -10,7 +10,7 @@ import { SECONDS_PER_YEAR } from "../../core/constants";
 import { fmtFixed } from "../format";
 import { CHROME, SERIES } from "../palette";
 import { useStudio } from "../store";
-import { missionSeries, orbitSeries } from "../telemetryData";
+import { joinSeries, missionSeries, orbitSeries } from "../telemetryData";
 import type { BandSpec } from "./UPlotChart";
 import { UPlotChart } from "./UPlotChart";
 
@@ -22,6 +22,8 @@ interface SeriesSpec {
   color: string;
   dash?: number[];
   width?: number;
+  /** Bridge nulls (used by A/B overlays on a union x grid). */
+  spanGaps?: boolean;
 }
 
 interface OptArgs {
@@ -78,6 +80,7 @@ function mkOpts(a: OptArgs): Omit<uPlot.Options, "width" | "height"> {
           stroke: s.color,
           width: s.width ?? 1.5,
           dash: s.dash,
+          spanGaps: s.spanGaps,
           // markers only while the series is too short to draw a line
           points: { show: (u) => (u.data[0]?.length ?? 0) < 3, size: 5 },
           value: (_u, v) => (v == null ? "–" : fmtFixed(v, dec)),
@@ -142,6 +145,19 @@ function OrbitCharts() {
     () => (d ? [{ ranges: d.eclipse, color: CHROME.eclipseFill }] : []),
     [d],
   );
+  // stable data identities: setData only when a new epoch trace arrives
+  const tempData = useMemo<uPlot.AlignedData>(
+    () => (d ? [d.x, d.tj, d.tRad, d.tCool] : [[]]),
+    [d],
+  );
+  const powerData = useMemo<uPlot.AlignedData>(
+    () => (d ? [d.x, d.pArrKw, d.pLoadKw] : [[]]),
+    [d],
+  );
+  const dutyData = useMemo<uPlot.AlignedData>(
+    () => (d ? [d.x, d.fPct, d.socPct] : [[]]),
+    [d],
+  );
 
   if (!d) return <div className="chart-empty">waiting for first epoch…</div>;
   return (
@@ -149,21 +165,21 @@ function OrbitCharts() {
       <UPlotChart
         opts={tempOpts}
         height={CHART_H}
-        data={[d.x, d.tj, d.tRad, d.tCool]}
+        data={tempData}
         bands={eclipse}
         cursorX={phaseMin}
       />
       <UPlotChart
         opts={powerOpts}
         height={CHART_H}
-        data={[d.x, d.pArrKw, d.pLoadKw]}
+        data={powerData}
         bands={eclipse}
         cursorX={phaseMin}
       />
       <UPlotChart
         opts={dutyOpts}
         height={CHART_H}
-        data={[d.x, d.fPct, d.socPct]}
+        data={dutyData}
         bands={eclipse}
         cursorX={phaseMin}
       />
@@ -177,13 +193,71 @@ function MissionCharts() {
   const pflopsNominal = useStudio((s) => s.cfg.chip.pflops_nominal);
   const years = useStudio((s) => s.cfg.mission.years);
   const stochasticRun = useStudio((s) => s.stochasticRun);
+  const pinned = useStudio((s) => s.pinned);
   const timeYr = useStudio((s) => s.tick.timeS) / SECONDS_PER_YEAR;
 
   const d = useMemo(
     () => missionSeries(rows, nGpu, nGpu * pflopsNominal, stochasticRun),
     [rows, nGpu, pflopsNominal, stochasticRun],
   );
-  const xMax = years;
+  // pinned baseline (A/B): expected mission of the snapshotted design
+  const pd = useMemo(
+    () =>
+      pinned
+        ? missionSeries(
+            pinned.hist,
+            pinned.cfg.chip.n_gpu,
+            pinned.cfg.chip.n_gpu * pinned.cfg.chip.pflops_nominal,
+            false,
+          )
+        : null,
+    [pinned],
+  );
+  const hasPin = pd !== null;
+  const xMax = Math.max(years, pinned?.cfg.mission.years ?? 0);
+
+  /** Current-design data, with one pinned series union-joined behind it. */
+  const withPin = useMemo(() => {
+    return (
+      own: number[][],
+      pinnedSeries: number[] | undefined,
+    ): uPlot.AlignedData => {
+      if (!pd || !pinnedSeries) return [d.x, ...own] as uPlot.AlignedData;
+      const j = joinSeries(d.x, own, pd.x, [pinnedSeries]);
+      return [j.x, ...j.ys1, ...j.ys2] as uPlot.AlignedData;
+    };
+  }, [d, pd]);
+  /** Appended overlay series spec (same entity color, dashed = pinned). */
+  const pinSpec = (label: string, color: string): SeriesSpec[] =>
+    hasPin
+      ? [{ label, color, dash: [2, 4], width: 1, spanGaps: true }]
+      : [];
+
+  // stable data identities: setData only on new epochs / pin changes
+  const computeData = useMemo(
+    () => withPin([d.effPflops, d.nameplate], pd?.effPflops),
+    [withPin, d, pd],
+  );
+  const fleetData = useMemo(
+    () => withPin([d.alivePct, d.battCapPct, d.dodPct], pd?.alivePct),
+    [withPin, d, pd],
+  );
+  const tempData = useMemo(
+    () => withPin([d.tjMean, d.tjMax, d.tRad], pd?.tjMean),
+    [withPin, d, pd],
+  );
+  const powerData = useMemo(
+    () => withPin([d.pArrKw, d.loadKw], pd?.pArrKw),
+    [withPin, d, pd],
+  );
+  const doseData = useMemo<uPlot.AlignedData>(
+    () => [d.x, d.tidKrad] as uPlot.AlignedData,
+    [d],
+  );
+  const dutyData = useMemo<uPlot.AlignedData>(
+    () => [d.x, d.fMeanPct, d.ovhPct, d.idlePct] as uPlot.AlignedData,
+    [d],
+  );
 
   const computeOpts = useMemo(
     () =>
@@ -195,9 +269,10 @@ function MissionCharts() {
         series: [
           { label: "delivered", color: SERIES.pflops },
           { label: "nameplate", color: CHROME.reference, dash: [5, 5], width: 1 },
+          ...pinSpec("pinned", SERIES.pflops),
         ],
       }),
-    [xMax],
+    [xMax, hasPin],
   );
   const fleetOpts = useMemo(
     () =>
@@ -211,9 +286,10 @@ function MissionCharts() {
           { label: "GPUs alive", color: SERIES.alive },
           { label: "batt capacity", color: SERIES.battCap, dash: [6, 4] },
           { label: "DoD", color: SERIES.dod },
+          ...pinSpec("alive (pinned)", SERIES.alive),
         ],
       }),
-    [xMax],
+    [xMax, hasPin],
   );
   const tempOpts = useMemo(
     () =>
@@ -225,9 +301,10 @@ function MissionCharts() {
           { label: "Tj mean", color: SERIES.tj },
           { label: "Tj max", color: SERIES.tjMax, dash: [3, 3], width: 1 },
           { label: "radiator", color: SERIES.tRad },
+          ...pinSpec("Tj (pinned)", SERIES.tj),
         ],
       }),
-    [xMax],
+    [xMax, hasPin],
   );
   const powerOpts = useMemo(
     () =>
@@ -239,9 +316,10 @@ function MissionCharts() {
         series: [
           { label: "array (sunlit)", color: SERIES.pArr },
           { label: "design load", color: SERIES.pLoad },
+          ...pinSpec("array (pinned)", SERIES.pArr),
         ],
       }),
-    [xMax],
+    [xMax, hasPin],
   );
   const doseOpts = useMemo(
     () =>
@@ -283,38 +361,38 @@ function MissionCharts() {
       <UPlotChart
         opts={computeOpts}
         height={CHART_H}
-        data={[d.x, d.effPflops, d.nameplate]}
+        data={computeData}
         cursorX={timeYr}
       />
       <UPlotChart
         opts={fleetOpts}
         height={CHART_H}
-        data={[d.x, d.alivePct, d.battCapPct, d.dodPct]}
+        data={fleetData}
         cursorX={timeYr}
       />
       <UPlotChart
         opts={tempOpts}
         height={CHART_H}
-        data={[d.x, d.tjMean, d.tjMax, d.tRad]}
+        data={tempData}
         cursorX={timeYr}
       />
       <UPlotChart
         opts={powerOpts}
         height={CHART_H}
-        data={[d.x, d.pArrKw, d.loadKw]}
+        data={powerData}
         cursorX={timeYr}
       />
       <UPlotChart
         opts={doseOpts}
         height={CHART_H}
-        data={[d.x, d.tidKrad]}
+        data={doseData}
         bands={speBands}
         cursorX={timeYr}
       />
       <UPlotChart
         opts={dutyOpts}
         height={CHART_H}
-        data={[d.x, d.fMeanPct, d.ovhPct, d.idlePct]}
+        data={dutyData}
         cursorX={timeYr}
       />
     </>

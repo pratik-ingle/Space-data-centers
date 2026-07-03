@@ -118,6 +118,22 @@ try {
   );
   console.log(`headline after altitude change: ${await text(".headline-fom b")}`);
 
+  // 6b. eclipse pipeline: ISS-like profile at t=0 has beta ~0 -> the badge
+  // must flip to ECLIPSE within a couple of orbits of play
+  await page.select(".sidebar select", "mid_incl");
+  await sleep(500); // re-init debounce
+  await page.click(".transport .play");
+  await waitFor(
+    async () => (await text(".vp-badge")).includes("ECLIPSE"),
+    "eclipse badge on ISS-like orbit",
+    20000,
+  );
+  console.log("eclipse badge: OK");
+  if (SHOT) {
+    await page.screenshot({ path: SHOT.replace(/\.png$/, "_eclipse.png") });
+  }
+  await page.click(".transport .play"); // pause
+
   // 7. reset, run the full mission, confirm completion at 5 yr
   await page.click("button.ghost"); // reset
   await sleep(500); // debounce + re-init
@@ -130,6 +146,28 @@ try {
     "run to end of mission",
   );
   console.log(`end state: ${await text(".time-readouts")}`);
+
+  // 8. 3D viewport: WebGL canvas alive, badge showing, chase view works
+  const vpCanvas = await page.$(".viewport canvas");
+  if (!vpCanvas) throw new Error("3D viewport canvas missing");
+  const badge = await text(".vp-badge");
+  console.log(`viewport badge: ${badge}`);
+  if (!/SUNLIT|ECLIPSE/.test(badge)) throw new Error("viewport badge missing");
+  const glOk = await page.evaluate(() => {
+    const c = document.querySelector(".viewport canvas");
+    if (!(c instanceof HTMLCanvasElement)) return false;
+    const gl = c.getContext("webgl2") ?? c.getContext("webgl");
+    return gl !== null && !gl.isContextLost();
+  });
+  if (!glOk) throw new Error("WebGL context lost/missing");
+  if (SHOT) {
+    await page.screenshot({ path: SHOT.replace(/\.png$/, "_earth.png") });
+  }
+  await page.$$eval(".vp-views .tab", (btns) => {
+    const b = btns.find((x) => x.textContent?.trim() === "Spacecraft");
+    if (b) b.click();
+  });
+  await sleep(800); // let the chase camera settle for the screenshot
 
   if (SHOT) {
     await page.screenshot({ path: SHOT, fullPage: false });

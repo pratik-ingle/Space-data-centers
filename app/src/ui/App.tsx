@@ -8,6 +8,7 @@ import { fmtFixed } from "./format";
 import { bootStudio, useStudio } from "./store";
 import { ChartsPanel } from "./components/Charts";
 import { ParamPanel } from "./components/ParamPanel";
+import { Viewport } from "./components/Scene";
 import { TelemetryStrip } from "./components/TelemetryStrip";
 import { TimeControls } from "./components/TimeControls";
 
@@ -73,6 +74,7 @@ export function App() {
         </aside>
         <main className="main">
           <WarningsBar />
+          <Viewport />
           <TelemetryStrip />
           <ChartsPanel />
         </main>

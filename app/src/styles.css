@@ -717,6 +717,149 @@ details[open] summary {
   padding: 8px 0;
 }
 
+/* ------------------------------------------------------------ monte carlo */
+.mc-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-runs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.mc-runs input {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  width: 52px;
+}
+
+.mc-progress {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.mc-progress i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms;
+}
+
+.mc-results {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mc-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+  align-items: baseline;
+}
+
+.mc-stats b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-unit {
+  font-size: 10px;
+}
+
+.mc-hist {
+  width: 100%;
+  height: auto;
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.mc-marker-label {
+  fill: #c3c2b7;
+  font-size: 9px;
+  font-family: var(--font);
+}
+
+.mc-tornado {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mc-trow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.mc-tlabel {
+  width: 92px;
+  flex: none;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-tbar {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: var(--surface-2);
+  border-radius: 3px;
+}
+
+.mc-tzero {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.mc-tfill {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-radius: 2px;
+}
+
+.mc-tval {
+  width: 42px;
+  flex: none;
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+.mc-tnote,
+.mc-hint {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
 .preset-select {
   font: inherit;
   font-size: 12px;

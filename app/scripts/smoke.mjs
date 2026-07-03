@@ -220,6 +220,24 @@ try {
     await page.screenshot({ path: SHOT.replace(/\.png$/, "_ab.png") });
   }
 
+  // 11. Monte Carlo: run the ensemble, histogram + tornado render
+  await page.$$eval(".mc-controls button", (btns) => {
+    btns[0].click();
+  });
+  await waitFor(
+    async () => (await page.$(".mc-hist")) !== null,
+    "Monte Carlo results",
+    120000,
+    500,
+  );
+  const mcStats = await text(".mc-stats");
+  const nTornado = (await page.$$(".mc-trow")).length;
+  console.log(`MC: ${mcStats} · tornado rows: ${nTornado}`);
+  if (nTornado < 5) throw new Error("tornado chart missing rows");
+  if (SHOT) {
+    await page.screenshot({ path: SHOT.replace(/\.png$/, "_mc.png") });
+  }
+
   if (errors.length) {
     throw new Error(`page errors:\n${errors.join("\n")}`);
   }

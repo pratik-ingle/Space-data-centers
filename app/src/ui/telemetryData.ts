@@ -87,6 +87,36 @@ export function joinSeries(
   return { x: xs, ys1: remap(x1, ys1), ys2: remap(x2, ys2) };
 }
 
+export interface HistogramData {
+  /** Bin left edges plus the final right edge (n+1 values). */
+  edges: number[];
+  counts: number[];
+  maxCount: number;
+}
+
+/** Equal-width histogram over the sample range (pure; for the MC panel). */
+export function histogram(values: number[], nBins = 16): HistogramData {
+  if (values.length === 0) return { edges: [0, 1], counts: [0], maxCount: 0 };
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of values) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  if (hi - lo < 1e-12) {
+    // degenerate: all mass in one bin
+    return { edges: [lo, lo + 1e-12], counts: [values.length], maxCount: values.length };
+  }
+  const w = (hi - lo) / nBins;
+  const counts = new Array<number>(nBins).fill(0);
+  for (const v of values) {
+    const i = Math.min(Math.floor((v - lo) / w), nBins - 1);
+    counts[i] += 1;
+  }
+  const edges = Array.from({ length: nBins + 1 }, (_, i) => lo + i * w);
+  return { edges, counts, maxCount: Math.max(...counts) };
+}
+
 export interface MissionSeriesData {
   /** Mission time [yr]. */
   x: number[];

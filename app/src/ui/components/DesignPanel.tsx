@@ -9,6 +9,7 @@ import { SECONDS_PER_YEAR } from "../../core/constants";
 import type { MissionEvent } from "../../core/mission";
 import { fmtFixed, fmtPct } from "../format";
 import { useStudio } from "../store";
+import { McPanel } from "./McPanel";
 
 /** Fixed mass-item colors (categorical slots; identity never re-ranked). */
 const MASS_COLORS: Record<string, string> = {
@@ -239,6 +240,7 @@ export function DesignPanel() {
       <Losses />
       <Sizing />
       <Warnings />
+      <McPanel />
       <EventLog />
     </aside>
   );

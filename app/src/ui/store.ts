@@ -28,6 +28,7 @@ import type {
 import type {
   FromAnalysis,
   FromSim,
+  McLite,
   TickSample,
   ToAnalysis,
   ToSim,
@@ -78,6 +79,12 @@ export interface StudioState {
   pinning: boolean;
   /** Active preset id, or "custom" once any parameter is touched. */
   presetId: string;
+  // --- Monte Carlo ensemble (analysis worker)
+  mcRunning: boolean;
+  mcDone: number;
+  mcTotal: number;
+  /** Cleared whenever the design changes — a stale ensemble is misleading. */
+  mcResult: McLite | null;
   // --- actions
   setParam: (path: string, value: number) => void;
   mutateCfg: (mutate: (c: Config) => void) => void;
@@ -97,6 +104,7 @@ export interface StudioState {
   exportJson: () => string;
   /** Throws (ZodError/SyntaxError) on invalid input; caller shows the message. */
   importJson: (text: string) => void;
+  runMc: () => void;
 }
 
 const simWorker = new Worker(new URL("../worker/simWorker.ts", import.meta.url), {
@@ -112,6 +120,7 @@ const postAna = (m: ToAnalysis): void => anaWorker.postMessage(m);
 
 let projId = 0;
 let pinReqId = 0;
+let mcReqId = 0;
 /** Cfg snapshot taken when the pin request was posted (not when it lands). */
 let pinReqCfg: Config | null = null;
 let reinitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -133,7 +142,15 @@ export const useStudio = create<StudioState>()(
     /** Apply a validated new config: instant sizing, debounced sim restart. */
     const applyCfg = (cfg: Config, presetId = "custom"): void => {
       const design = sizeDesign(cfg);
-      set({ cfg, design, warnings: designWarnings(cfg, design), presetId });
+      mcReqId++; // orphan any in-flight ensemble; its cfg is stale now
+      set({
+        cfg,
+        design,
+        warnings: designWarnings(cfg, design),
+        presetId,
+        mcResult: null,
+        mcRunning: false,
+      });
       scheduleReinit(cfg);
     };
 
@@ -165,6 +182,10 @@ export const useStudio = create<StudioState>()(
       pinned: null,
       pinning: false,
       presetId: "baseline_dd",
+      mcRunning: false,
+      mcDone: 0,
+      mcTotal: 0,
+      mcResult: null,
 
       setParam: (path, value) => applyCfg(coreSetParam(get().cfg, path, value)),
 
@@ -224,6 +245,18 @@ export const useStudio = create<StudioState>()(
       importJson: (text) => {
         const cfg = parseConfig(JSON.parse(text));
         applyCfg(cfg);
+      },
+
+      runMc: () => {
+        const { cfg } = get();
+        set({ mcRunning: true, mcDone: 0, mcTotal: cfg.mission.mc_runs, mcResult: null });
+        postAna({
+          t: "mc",
+          id: ++mcReqId,
+          cfg,
+          runs: cfg.mission.mc_runs,
+          seed: cfg.mission.seed,
+        });
       },
     };
   }),
@@ -306,8 +339,14 @@ anaWorker.onmessage = (ev: MessageEvent<FromAnalysis>) => {
       }
       break;
     case "mcProgress":
+      if (m.id === mcReqId) {
+        useStudio.setState({ mcDone: m.done, mcTotal: m.total });
+      }
+      break;
     case "mc":
-      // consumed by the M5 Monte Carlo panel
+      if (m.id === mcReqId) {
+        useStudio.setState({ mcResult: m.result, mcRunning: false });
+      }
       break;
   }
 };

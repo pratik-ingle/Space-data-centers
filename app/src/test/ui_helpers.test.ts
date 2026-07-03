@@ -20,6 +20,7 @@ import {
 } from "../ui/format";
 import { posToVal, valToPos, SLIDER_STEPS } from "../ui/sliderMath";
 import {
+  histogram,
   joinSeries,
   missionSeries,
   offBands,
@@ -158,6 +159,23 @@ describe("telemetry marshaling", () => {
     expect(d.tidKrad[d.tidKrad.length - 1]).toBeGreaterThan(0);
     const nSpe = res.hist.filter((r) => r.spe_frac > 0).length;
     expect(d.spe.length).toBe(nSpe);
+  });
+});
+
+describe("histogram", () => {
+  it("bins conserve the sample count and span the range", () => {
+    const vals = Array.from({ length: 500 }, (_, i) => 100 + (i % 50));
+    const h = histogram(vals, 10);
+    expect(h.counts.reduce((s, c) => s + c, 0)).toBe(500);
+    expect(h.edges[0]).toBe(100);
+    expect(h.edges[h.edges.length - 1]).toBe(149);
+    expect(h.edges.length).toBe(h.counts.length + 1);
+  });
+
+  it("handles degenerate and empty samples", () => {
+    expect(histogram([], 8).maxCount).toBe(0);
+    const h = histogram([5, 5, 5], 8);
+    expect(h.counts).toEqual([3]);
   });
 });
 

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "baseline": "tsx scripts/baseline.ts"
+    "baseline": "tsx scripts/baseline.ts",
+    "docs:params": "tsx scripts/gen_params_doc.ts"
   },
   "dependencies": {
     "@react-three/fiber": "^9.1.2",

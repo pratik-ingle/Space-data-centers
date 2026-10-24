@@ -877,6 +877,24 @@ details[open] summary {
   gap: 6px;
 }
 
+/* repo link: styled as a ghost button, set apart from the design actions */
+.header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.header-link:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--ink);
+}
+
 /* --------------------------------------------------------- time controls */
 .time-controls {
   flex: none;

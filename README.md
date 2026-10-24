@@ -1,5 +1,8 @@
 # OrbitalDC Studio — an interactive physics simulator for orbital data centers
 
+**▶ Try it live: [pratik-ingle.github.io/Space-data-centers](https://pratik-ingle.github.io/Space-data-centers/)**
+— runs entirely in your browser (needs WebGL); nothing to install.
+
 Browser-based engineering design-space exploration of a GPU compute cluster on
 a satellite bus. Move a slider — the design re-sizes, re-masses and re-flies a
 5-year mission live, and everything rolls up to one figure of merit:
@@ -21,6 +24,9 @@ every knob's default/range/meaning in the auto-generated
 at 550 km dawn-dusk SSO → **147.0 PFLOP-yr, 3,219 kg, 45.7 PFLOP-yr/tonne**.
 
 ## Run it
+
+The live site is the `gh-pages` branch, published from `app/` with
+`npm run deploy` (build + push of `dist/`). To run locally:
 
 ```bash
 cd app
